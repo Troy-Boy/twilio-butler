@@ -13,20 +13,10 @@ class SubaccountService:
 		res = self.client.api.accounts(subaccount_sid).fetch()
 		return res
 	
-	def get_phone_number_info(self, subaccount_sid, phone_number):
+	def get_phone_number_info(self, subaccount_sid, phone_number_sid):
 		# Initialize the PhoneNumberService with the subaccount SID and auth token
 		subaccount = self.get_subaccount_info(subaccount_sid)
 		phone_number_service = PhoneNumberService(subaccount.sid, subaccount_auth_token=subaccount.auth_token)
-		phone_numbers = phone_number_service.list_phone_numbers()
-		phone_number_sid = None
-		for p_n in phone_numbers:
-			if p_n['phone_number'] == phone_number:
-				phone_number_sid = p_n['sid']
-				break
-		if not phone_number_sid:
-			return {
-				'message' : 'Phone number not found'
-			}
 		phone_number = phone_number_service.get_phone_number_info(phone_number_sid)
 
 		# Return a dictionary with relevant info
@@ -39,7 +29,25 @@ class SubaccountService:
 			'emergency_address_sid': phone_number.emergency_address_sid,
 		}
 
+	def get_phone_numbers(self, subaccount_sid): 
+		# Initialize the PhoneNumberService with the subaccount SID and auth token
+		subaccount = self.get_subaccount_info(subaccount_sid)
+		phone_number_service = PhoneNumberService(subaccount.sid, subaccount_auth_token=subaccount.auth_token)
+		phone_numbers = phone_number_service.list_phone_numbers()
+		phone_numbers_data = []
+		for phone_number in phone_numbers:
+			raw_data = phone_number_service.get_phone_number_info(phone_number['sid'])
+			phone_numbers_data.append({
+			'sid': raw_data.sid,
+			'phone_number': raw_data.phone_number,
+			'friendly_name': raw_data.friendly_name,
+			'date_created': raw_data.date_created,
+			'status': raw_data.status,
+			'emergency_address_sid': raw_data.emergency_address_sid,
+		})
 
+		return phone_numbers_data
+	
 	def create_subaccount(self, friendly_name):
 		return self.client.api.accounts.create(friendly_name=friendly_name)
 
@@ -47,11 +55,10 @@ class SubaccountService:
 		subaccount = self.client.api.accounts(subaccount_sid).fetch()
 		return subaccount.update(friendly_name=friendly_name)
 	
-	def release_phone_number(self, subaccount_sid, phone_number): 
+	def release_phone_number(self, subaccount_sid, phone_number_sid): 
 		# Initialize the PhoneNumberService with the subaccount SID and auth token
 		subaccount = self.get_subaccount_info(subaccount_sid)
 		phone_number_service = PhoneNumberService(subaccount_sid, subaccount_auth_token=subaccount.auth_token)
-		phone_number_sid = self.get_phone_number_info(subaccount_sid, phone_number)['sid']
 		# Release the specified phone number
 		return phone_number_service.release_phone_number(phone_number_sid)
 	

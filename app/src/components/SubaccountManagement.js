@@ -13,7 +13,6 @@ function SubaccountManagement() {
     axios.get('http://localhost:5000/subaccounts')
       .then(response => {
         setSubaccounts(response.data);
-		console.log(response.data);
       })
       .catch(error => {
         console.error('Error fetching subaccounts:', error);
@@ -22,8 +21,7 @@ function SubaccountManagement() {
 
   const handleSubaccountChange = (event) => {
     const subaccount = event.target.value;
-    setSelectedSubaccount(subaccount);
-
+	getSubaccount(subaccount);
     // Fetch phone numbers for selected subaccount
     axios.get(`http://localhost:5000/subaccounts/${subaccount}/phone-numbers`)
       .then(response => {
@@ -46,17 +44,27 @@ function SubaccountManagement() {
       });
   };
 
-  const handleReleasePhoneNumber = () => {
+  const handleReleasePhoneNumber = (phone_sid) => {
     // Create a new subaccount
-    axios.post('http://localhost:5000/subaccounts', { friendly_name: newSubaccount })
+    axios.delete(`http://localhost:5000/subaccounts/${selectedSubaccount.sid}/${phone_sid}`)
       .then(response => {
-        setSubaccounts([...subaccounts, response.data]);
-        setNewSubaccount('');  // Reset input
+    	getSubaccount(selectedSubaccount)
       })
       .catch(error => {
-        console.error('Error creating subaccount:', error);
+        console.error('Error removing phone number:', error);
       });
   };
+
+  const getSubaccount = (subaccount_sid) => {
+	// Get a subaccount
+    axios.get(`http://localhost:5000/subaccounts/${subaccount_sid}`)
+      .then(response => {
+		setSelectedSubaccount(response.data);
+      })
+      .catch(error => {
+        console.error('Error getting subaccount:', error);
+      });
+  }
 
   return (
     <Box>
@@ -64,14 +72,15 @@ function SubaccountManagement() {
 
       {/* Select Subaccount */}
       <Select
-        value={selectedSubaccount}
+	  	defaultValue=''
+        value={selectedSubaccount.sid}
         onChange={handleSubaccountChange}
         displayEmpty
         fullWidth
       >
         <MenuItem value="" disabled>Select Subaccount</MenuItem>
         {subaccounts.map(sub => (
-          <MenuItem key={sub.sid} value={sub.sid}>{sub.friendly_name}</MenuItem>
+          <MenuItem key={sub.sid} value={sub.sid}>{sub.id}</MenuItem>
         ))}
       </Select>
 
@@ -104,6 +113,35 @@ function SubaccountManagement() {
           ))}
         </List>
       </Box>
+
+	  {/* Subaccount info */}
+		<Box mt={5}>
+			<Typography variant="h6">Subaccount</Typography>
+			<List>
+				<ListItem>
+					<ListItemText primary={`Friendly Name: ${selectedSubaccount.friendly_name}`} />
+				</ListItem>
+				<ListItem>
+					<ListItemText primary={`Account SID: ${selectedSubaccount.sid}`} />
+				</ListItem>
+				<ListItem>
+					<ListItemText primary={`Subaccount SID: ${selectedSubaccount.sid}`} />
+				</ListItem>
+				<ListItem>
+					<ListItemText primary={`Date Created: ${selectedSubaccount.date_created}`} />
+				</ListItem>
+				<ListItem>
+					<ListItemText primary={`Date Updated: ${selectedSubaccount.date_updated}`} />
+				</ListItem>
+				<ListItem>
+					<ListItemText primary={`Status: ${selectedSubaccount.status}`} />
+				</ListItem>
+				<ListItem>
+					<ListItemText primary={`Parent Account SID: ${selectedSubaccount.owner_account_sid}`} />
+				</ListItem>
+			</List> 
+			</Box>
+			
     </Box>
   );
 }

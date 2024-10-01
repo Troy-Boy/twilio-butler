@@ -1,4 +1,5 @@
 from flask import Flask, jsonify, request
+from flask_cors import CORS
 from services.subaccount_service import SubaccountService
 from services.phone_number_service import PhoneNumberService
 import os
@@ -8,6 +9,8 @@ from dotenv import load_dotenv
 load_dotenv()
 
 app = Flask(__name__)
+# Enable CORS and allow localhost:3000
+CORS(app, resources={r"/*": {"origins": "http://localhost:3000"}})
 
 # Instantiate services
 subaccount_service = SubaccountService()
@@ -80,10 +83,10 @@ def delete_subaccount(subaccount_sid):
 		return jsonify({'error': str(e)}), 500
 
 
-@app.route('/subaccounts/<subaccount_sid>/<phone_number>', methods=['DELETE'])
-def delete_phone_number(subaccount_sid, phone_number):
+@app.route('/subaccounts/<subaccount_sid>/<phone_number_sid>', methods=['DELETE'])
+def delete_phone_number(subaccount_sid, phone_number_sid):
 	try:
-		res = subaccount_service.release_phone_number(subaccount_sid, phone_number)
+		res = subaccount_service.release_phone_number(subaccount_sid, phone_number_sid)
 		
 		# Return a confirmation message
 		return jsonify({
@@ -105,12 +108,22 @@ def remove_emergency_address(subaccount_sid, phone_number):
 		}), 200
 	except Exception as e:
 		return jsonify({'error': str(e)}), 500
-	
-# Get phone number info
-@app.route('/subaccounts/<subaccount_sid>/<phone_number>', methods=['GET'])
-def get_phone_number_info(subaccount_sid, phone_number):
+
+# Get all phone number info
+@app.route('/subaccounts/<subaccount_sid>/phone-numbers', methods=['GET'])
+def get_phone_numbers_info(subaccount_sid):
 	try:
-		phone_number_info = subaccount_service.get_phone_number_info(subaccount_sid, phone_number)
+		phone_numbers_data = subaccount_service.get_phone_numbers(subaccount_sid)
+		
+		return jsonify(phone_numbers_data), 200
+	except Exception as e:
+		return jsonify({'error': str(e)}), 500
+
+# Get phone number info
+@app.route('/subaccounts/<subaccount_sid>/<phone_number_sid>', methods=['GET'])
+def get_phone_number_info(subaccount_sid, phone_number_sid):
+	try:
+		phone_number_info = subaccount_service.get_phone_number_info(subaccount_sid, phone_number_sid)
 		# Convert the AccountInstance object to a dictionary
 		
 		return jsonify(phone_number_info), 200
