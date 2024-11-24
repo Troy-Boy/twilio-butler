@@ -33,6 +33,7 @@ class PhoneNumberService:
 
 	def release_phone_number(self, phone_number_sid):
 	   # Release the phone number (delete it)
+		print('here 3' + phone_number_sid)
 		phone_number = self.client.incoming_phone_numbers(phone_number_sid).fetch()
 		# First, remove the emergency address before releasing the number
 		self.remove_emergency_address(phone_number_sid)

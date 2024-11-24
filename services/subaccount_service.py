@@ -58,7 +58,9 @@ class SubaccountService:
 	def release_phone_number(self, subaccount_sid, phone_number_sid): 
 		# Initialize the PhoneNumberService with the subaccount SID and auth token
 		subaccount = self.get_subaccount_info(subaccount_sid)
+		print('here 1')
 		phone_number_service = PhoneNumberService(subaccount_sid, subaccount_auth_token=subaccount.auth_token)
+		print('here 2')
 		# Release the specified phone number
 		return phone_number_service.release_phone_number(phone_number_sid)
 	
