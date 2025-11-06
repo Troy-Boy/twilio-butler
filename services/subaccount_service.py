@@ -6,23 +6,34 @@ class SubaccountService:
 	def __init__(self):
 		self.client = Client(os.getenv('TWILIO_ACCOUNT_SID'), os.getenv('TWILIO_AUTH_TOKEN'))
 
-	def list_subaccounts(self):
+	def list_subaccounts(self, include_badges=False):
+		"""
+		List all subaccounts.
+		
+		Args:
+			include_badges: If True, fetches emergency address and basic auth status for each account.
+						   This is slower but provides complete information.
+						   If False (default), only returns basic subaccount info for faster loading.
+		"""
 		subaccounts = self.client.api.accounts.list()
 		result = []
 		
 		for sa in subaccounts:
-			# Check if all phone numbers have emergency addresses registered
-			all_emergencies_registered = self.check_all_emergencies_registered(sa.sid, sa.auth_token)
-			
-			# Check if HTTP Basic Authentication for media is enabled
-			basic_auth_media = self.check_basic_auth_media(sa.sid)
-			
-			result.append({
+			subaccount_data = {
 				"sid": sa.sid,
 				"id": sa.friendly_name,
-				"allEmergenciesRegistered": all_emergencies_registered,
-				"basicAuthMedia": basic_auth_media
-			})
+			}
+			
+			# Only fetch badge data if explicitly requested
+			if include_badges:
+				subaccount_data["allEmergenciesRegistered"] = self.check_all_emergencies_registered(sa.sid, sa.auth_token)
+				subaccount_data["basicAuthMedia"] = self.check_basic_auth_media(sa.sid)
+			else:
+				# Return null/undefined so frontend knows these haven't been loaded yet
+				subaccount_data["allEmergenciesRegistered"] = None
+				subaccount_data["basicAuthMedia"] = None
+			
+			result.append(subaccount_data)
 		
 		return result
 

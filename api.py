@@ -43,6 +43,24 @@ def get_subaccount(subaccount_sid):
 	except Exception as e:
 		return jsonify({'error': str(e)}), 500
 
+# Get badge status for a subaccount (lightweight endpoint)
+@app.route('/subaccounts/<subaccount_sid>/badges', methods=['GET'])
+def get_subaccount_badges(subaccount_sid):
+	try:
+		# Fetch the subaccount to get auth token
+		subaccount = subaccount_service.client.api.accounts(subaccount_sid).fetch()
+		
+		all_emergencies_registered = subaccount_service.check_all_emergencies_registered(subaccount_sid, subaccount.auth_token)
+		basic_auth_media = subaccount_service.check_basic_auth_media(subaccount_sid)
+		
+		return jsonify({
+			'sid': subaccount_sid,
+			'allEmergenciesRegistered': all_emergencies_registered,
+			'basicAuthMedia': basic_auth_media
+		}), 200
+	except Exception as e:
+		return jsonify({'error': str(e)}), 500
+
 # Create a new subaccount
 @app.route('/subaccounts', methods=['POST'])
 def create_subaccount():
