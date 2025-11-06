@@ -34,8 +34,10 @@ def get_subaccount(subaccount_sid):
 	try:
 		subaccount_info = subaccount_service.get_subaccount_info(subaccount_sid)
 		print(subaccount_info)
-		# Convert the AccountInstance object to a dictionary
-		subaccount_data =  extract_subaccount_data(subaccount_info)
+		# Convert the AccountInstance object to a dictionary and add badge fields
+		subaccount_data = extract_subaccount_data(subaccount_info['account_instance'])
+		subaccount_data['allEmergenciesRegistered'] = subaccount_info['allEmergenciesRegistered']
+		subaccount_data['basicAuthMedia'] = subaccount_info['basicAuthMedia']
 		
 		return jsonify(subaccount_data), 200
 	except Exception as e:

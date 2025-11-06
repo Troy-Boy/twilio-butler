@@ -12,7 +12,7 @@ class SubaccountService:
 		
 		for sa in subaccounts:
 			# Check if all phone numbers have emergency addresses registered
-			all_emergencies_registered = self.check_all_emergencies_registered(sa.sid)
+			all_emergencies_registered = self.check_all_emergencies_registered(sa.sid, sa.auth_token)
 			
 			# Check if HTTP Basic Authentication for media is enabled
 			basic_auth_media = self.check_basic_auth_media(sa.sid)
@@ -28,11 +28,25 @@ class SubaccountService:
 
 	def get_subaccount_info(self, subaccount_sid):
 		res = self.client.api.accounts(subaccount_sid).fetch()
-		return res
+		
+		# Check if all phone numbers have emergency addresses registered
+		all_emergencies_registered = self.check_all_emergencies_registered(subaccount_sid, res.auth_token)
+		
+		# Check if HTTP Basic Authentication for media is enabled
+		# Pass the already fetched account to avoid duplicate API calls
+		basic_auth_media = self.check_basic_auth_media(subaccount_sid, res)
+		
+		# Return a dictionary with the account info and badge fields
+		return {
+			'account_instance': res,
+			'allEmergenciesRegistered': all_emergencies_registered,
+			'basicAuthMedia': basic_auth_media
+		}
 	
 	def get_phone_number_info(self, subaccount_sid, phone_number_sid):
 		# Initialize the PhoneNumberService with the subaccount SID and auth token
-		subaccount = self.get_subaccount_info(subaccount_sid)
+		subaccount_info = self.get_subaccount_info(subaccount_sid)
+		subaccount = subaccount_info['account_instance']
 		phone_number_service = PhoneNumberService(subaccount.sid, subaccount_auth_token=subaccount.auth_token)
 		phone_number = phone_number_service.get_phone_number_info(phone_number_sid)
 
@@ -46,10 +60,14 @@ class SubaccountService:
 			'emergency_address_sid': phone_number.emergency_address_sid,
 		}
 
-	def get_phone_numbers(self, subaccount_sid): 
+	def get_phone_numbers(self, subaccount_sid, subaccount_auth_token=None): 
 		# Initialize the PhoneNumberService with the subaccount SID and auth token
-		subaccount = self.get_subaccount_info(subaccount_sid)
-		phone_number_service = PhoneNumberService(subaccount.sid, subaccount_auth_token=subaccount.auth_token)
+		if subaccount_auth_token is None:
+			subaccount_info = self.get_subaccount_info(subaccount_sid)
+			subaccount = subaccount_info['account_instance']
+			subaccount_auth_token = subaccount.auth_token
+		
+		phone_number_service = PhoneNumberService(subaccount_sid, subaccount_auth_token=subaccount_auth_token)
 		phone_numbers = phone_number_service.list_phone_numbers()
 		phone_numbers_data = []
 		for phone_number in phone_numbers:
@@ -65,13 +83,13 @@ class SubaccountService:
 
 		return phone_numbers_data
 	
-	def check_all_emergencies_registered(self, subaccount_sid):
+	def check_all_emergencies_registered(self, subaccount_sid, subaccount_auth_token=None):
 		"""
 		Check if all phone numbers in the subaccount have emergency addresses registered.
 		Returns True if all phone numbers have emergency_address_sid, False otherwise.
 		"""
 		try:
-			phone_numbers_data = self.get_phone_numbers(subaccount_sid)
+			phone_numbers_data = self.get_phone_numbers(subaccount_sid, subaccount_auth_token)
 			
 			# If there are no phone numbers, return True (vacuous truth)
 			if not phone_numbers_data:
@@ -83,18 +101,24 @@ class SubaccountService:
 			print(f"Error checking emergency addresses for subaccount {subaccount_sid}: {e}")
 			return False
 	
-	def check_basic_auth_media(self, subaccount_sid):
+	def check_basic_auth_media(self, subaccount_sid, subaccount=None):
 		"""
 		Check if HTTP Basic Authentication for media access is enabled for the subaccount.
 		Returns True if enabled, False otherwise.
+		
+		This checks the Voice -> Settings -> General -> HTTP Basic Authentication for media access setting.
+		It works by checking if there are any SIP credential lists associated with the account.
+		If credential lists exist, basic auth is enabled.
 		"""
 		try:
-			subaccount = self.get_subaccount_info(subaccount_sid)
-			# The auth_type_calls property indicates if basic auth is required for media
-			# If it's 'any', no authentication is required
-			# If it's 'credential-list' or similar, authentication is enabled
-			auth_type = getattr(subaccount, 'auth_type_calls', None)
-			return auth_type is not None and auth_type != 'any'
+			# Check if the account has any SIP credential lists
+			# This indicates that authentication is required for media access
+			credential_lists = self.client.api.accounts(subaccount_sid).sip.credential_lists.list(limit=1)
+			
+			# If there are credential lists, basic auth is enabled
+			has_credential_lists = len(credential_lists) > 0
+			
+			return has_credential_lists
 		except Exception as e:
 			print(f"Error checking basic auth media for subaccount {subaccount_sid}: {e}")
 			return False
@@ -108,7 +132,8 @@ class SubaccountService:
 	
 	def release_phone_number(self, subaccount_sid, phone_number_sid): 
 		# Initialize the PhoneNumberService with the subaccount SID and auth token
-		subaccount = self.get_subaccount_info(subaccount_sid)
+		subaccount_info = self.get_subaccount_info(subaccount_sid)
+		subaccount = subaccount_info['account_instance']
 		print('here 1')
 		phone_number_service = PhoneNumberService(subaccount_sid, subaccount_auth_token=subaccount.auth_token)
 		print('here 2')
@@ -116,7 +141,8 @@ class SubaccountService:
 		return phone_number_service.release_phone_number(phone_number_sid)
 	
 	def remove_emergency_address(self, subaccount_sid, phone_number):
-		subaccount = self.get_subaccount_info(subaccount_sid)
+		subaccount_info = self.get_subaccount_info(subaccount_sid)
+		subaccount = subaccount_info['account_instance']
 		phone_number_service = PhoneNumberService(subaccount_sid, subaccount_auth_token=subaccount.auth_token)
 		phone_number_sid = self.get_phone_number_info(subaccount_sid, phone_number)['sid']
 		message = phone_number_service.remove_emergency_address(phone_number_sid)
@@ -124,7 +150,8 @@ class SubaccountService:
 
 	def close_subaccount(self, subaccount_sid, closed):
 		# Fetch the subaccount
-		subaccount = self.get_subaccount_info(subaccount_sid)
+		subaccount_info = self.get_subaccount_info(subaccount_sid)
+		subaccount = subaccount_info['account_instance']
 		
 		# Initialize the PhoneNumberService with the subaccount SID
 		phone_number_service = PhoneNumberService(subaccount_sid, subaccount_auth_token=subaccount.auth_token)

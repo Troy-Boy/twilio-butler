@@ -4,7 +4,7 @@ Typography, Button, TextField, Box, List, ListItem,
 ListItemText, CircularProgress, Paper, Dialog, 
 DialogTitle, DialogContent, DialogActions, Tab, Tabs,
 Divider, Alert,
-ListItemButton
+ListItemButton, Chip
 } from '@mui/material';
 import axios from 'axios';
 import ConversationsList from './ConversationsList';
@@ -13,7 +13,7 @@ function SubaccountManagement() {
 const [subaccounts, setSubaccounts] = useState([]);
 const [loading, setLoading] = useState(false);
 const [error, setError] = useState(null);
-const [newSubaccountName, setNewSubaccountName] = useState('');
+// const [newSubaccountName, setNewSubaccountName] = useState('');
 const [selectedSubaccount, setSelectedSubaccount] = useState(null);
 const [phoneNumbers, setPhoneNumbers] = useState([]);
 const [loadingPhoneNumbers, setLoadingPhoneNumbers] = useState(false);
@@ -30,34 +30,34 @@ const fetchSubaccounts = async () => {
 	setLoading(true);
 	setError(null);
 	try {
-	const response = await axios.get('http://localhost:5000/subaccounts');
-	setSubaccounts(response.data);
+		const response = await axios.get('http://localhost:5000/subaccounts');
+		setSubaccounts(response.data);
 	} catch (err) {
-	console.error('Error fetching subaccounts:', err);
-	setError('Failed to fetch subaccounts. Please try again.');
+		console.error('Error fetching subaccounts:', err);
+		setError('Failed to fetch subaccounts. Please try again.');
 	} finally {
-	setLoading(false);
+		setLoading(false);
 	}
 };
 
-const handleCreateSubaccount = async () => {
-	if (!newSubaccountName) return;
+// const handleCreateSubaccount = async () => {
+// 	if (!newSubaccountName) return;
 	
-	setLoading(true);
-	setError(null);
-	try {
-	const response = await axios.post('http://localhost:5000/subaccounts', {
-		friendly_name: newSubaccountName
-	});
-	setSubaccounts([...subaccounts, response.data]);
-	setNewSubaccountName('');
-	} catch (err) {
-	console.error('Error creating subaccount:', err);
-	setError('Failed to create subaccount. Please try again.');
-	} finally {
-	setLoading(false);
-	}
-};
+// 	setLoading(true);
+// 	setError(null);
+// 	try {
+// 		const response = await axios.post('http://localhost:5000/subaccounts', {
+// 			friendly_name: newSubaccountName
+// 		});
+// 		setSubaccounts([...subaccounts, response.data]);
+// 		setNewSubaccountName('');
+// 	} catch (err) {
+// 		console.error('Error creating subaccount:', err);
+// 		setError('Failed to create subaccount. Please try again.');
+// 	} finally {
+// 		setLoading(false);
+// 	}
+// };
 
 const getSubaccount = async (subaccount_sid) => {
 	// Get a subaccount
@@ -81,12 +81,12 @@ const handleSubaccountSelect = async (subaccount) => {
 const fetchPhoneNumbers = async (subaccount) => {
 	setLoadingPhoneNumbers(true);
 	try {
-	const response = await axios.get(`http://localhost:5000/subaccounts/${subaccount.sid}/phone-numbers`);
-	setPhoneNumbers(response.data);
+		const response = await axios.get(`http://localhost:5000/subaccounts/${subaccount.sid}/phone-numbers`);
+		setPhoneNumbers(response.data);
 	} catch (err) {
-	console.error('Error fetching phone numbers:', err);
+		console.error('Error fetching phone numbers:', err);
 	} finally {
-	setLoadingPhoneNumbers(false);
+		setLoadingPhoneNumbers(false);
 	}
 };
 
@@ -96,26 +96,26 @@ const handleDeleteSubaccount = (subaccount) => {
 
 const confirmDelete = async () => {
 	try {
-	await axios.delete(`http://localhost:5000/subaccounts/${selectedSubaccount.sid}`, {
-		data: { closed: true }
-	});
-	setSubaccounts(subaccounts.filter(s => s.sid !== selectedSubaccount.sid));
-	setSelectedSubaccount(null);
-	setPhoneNumbers([]);
-	setDialogOpen(false);
+		await axios.delete(`http://localhost:5000/subaccounts/${selectedSubaccount.sid}`, {
+			data: { closed: true }
+		});
+		setSubaccounts(subaccounts.filter(s => s.sid !== selectedSubaccount.sid));
+		setSelectedSubaccount(null);
+		setPhoneNumbers([]);
+		setDialogOpen(false);
 	} catch (err) {
-	console.error('Error deleting subaccount:', err);
-	setError('Failed to delete subaccount. Please try again.');
+		console.error('Error deleting subaccount:', err);
+		setError('Failed to delete subaccount. Please try again.');
 	}
 };
 
 const handleReleasePhoneNumber = async (phoneNumberSid) => {
 	try {
-	await axios.delete(`http://localhost:5000/subaccounts/${selectedSubaccount.sid}/${phoneNumberSid}`);
-	// Refresh phone numbers list
-	fetchPhoneNumbers(selectedSubaccount);
+		await axios.delete(`http://localhost:5000/subaccounts/${selectedSubaccount.sid}/${phoneNumberSid}`);
+		// Refresh phone numbers list
+		fetchPhoneNumbers(selectedSubaccount);
 	} catch (err) {
-	console.error('Error releasing phone number:', err);
+		console.error('Error releasing phone number:', err);
 	}
 };
 
@@ -135,7 +135,7 @@ return (
 		Subaccount Management
 	</Typography>
 
-	<Box display="flex" mb={2}>
+	{/* <Box display="flex" mb={2}>
 		<TextField
 		label="New Subaccount Name"
 		variant="outlined"
@@ -152,12 +152,22 @@ return (
 		>
 		Create Subaccount
 		</Button>
-	</Box>
+	</Box> */}
 
 	{error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
 
 	<Paper elevation={2} sx={{ maxHeight: 300, overflow: 'auto', mb: 2 }}>
-		<Typography variant="h6" sx={{ p: 2 }}>Subaccounts</Typography>
+		<Box sx={{ p: 2, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+			<Typography variant="h6">Subaccounts</Typography>
+			<Box sx={{ display: 'flex', gap: 2, mr: 10 }}>
+				<Typography variant="caption" sx={{ minWidth: 80, textAlign: 'center' }}>
+					Emergency Addr.
+				</Typography>
+				<Typography variant="caption" sx={{ minWidth: 80, textAlign: 'center' }}>
+					Basic Auth
+				</Typography>
+			</Box>
+		</Box>
 		<Divider />
 		{loading ? (
 		<Box display="flex" justifyContent="center" alignItems="center" minHeight="200px">
@@ -171,6 +181,28 @@ return (
 				<ListItemText
 					primary={`friendlyName: ${subaccount.id}`}
 					secondary={`SID: ${subaccount.sid}`}
+				/>
+				<Chip 
+					label="E" 
+					size="small"
+					sx={{ 
+						mr: 1,
+						backgroundColor: subaccount.allEmergenciesRegistered ? '#4caf50' : '#f44336',
+						color: 'white',
+						fontWeight: 'bold',
+						minWidth: 40
+					}}
+				/>
+				<Chip 
+					label="A" 
+					size="small"
+					sx={{ 
+						mr: 2,
+						backgroundColor: subaccount.basicAuthMedia ? '#4caf50' : '#f44336',
+						color: 'white',
+						fontWeight: 'bold',
+						minWidth: 40
+					}}
 				/>
 				<Button 
 					variant="outlined" 
@@ -192,9 +224,31 @@ return (
 
 	{selectedSubaccount && (
 		<Box mt={4}>
-		<Typography variant="h6" gutterBottom>
-			Selected Subaccount: {selectedSubaccount.friendly_name}
-		</Typography>
+		<Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 2 }}>
+			<Typography variant="h6">
+				Selected Subaccount: {selectedSubaccount.friendly_name}
+			</Typography>
+			<Chip 
+				label="E" 
+				size="small"
+				sx={{ 
+					backgroundColor: selectedSubaccount.allEmergenciesRegistered ? '#4caf50' : '#f44336',
+					color: 'white',
+					fontWeight: 'bold',
+					minWidth: 40
+				}}
+			/>
+			<Chip 
+				label="A" 
+				size="small"
+				sx={{ 
+					backgroundColor: selectedSubaccount.basicAuthMedia ? '#4caf50' : '#f44336',
+					color: 'white',
+					fontWeight: 'bold',
+					minWidth: 40
+				}}
+			/>
+		</Box>
 		<List>
 			<ListItem>
 				<ListItemText>
@@ -225,7 +279,12 @@ return (
 
 		{tabValue === 0 && (
 			<Paper elevation={2} sx={{ maxHeight: 300, overflow: 'auto' }}>
-			<Typography variant="subtitle1" sx={{ p: 2 }}>Phone Numbers</Typography>
+			<Box sx={{ p: 2, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+				<Typography variant="subtitle1">Phone Numbers</Typography>
+				<Typography variant="caption" sx={{ mr: 18 }}>
+					Emergency Addr.
+				</Typography>
+			</Box>
 			<Divider />
 			{loadingPhoneNumbers ? (
 				<Box display="flex" justifyContent="center" alignItems="center" minHeight="200px">
@@ -244,6 +303,17 @@ return (
 						<ListItemText 
 							primary={number.phone_number} 
 							secondary={`SID: ${number.sid}`} 
+						/>
+						<Chip 
+							label="E" 
+							size="small"
+							sx={{ 
+								mr: 1,
+								backgroundColor: number.emergency_address_sid ? '#4caf50' : '#f44336',
+								color: 'white',
+								fontWeight: 'bold',
+								minWidth: 40
+							}}
 						/>
 						<Button 
 							variant="outlined" 

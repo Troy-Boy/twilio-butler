@@ -6,9 +6,9 @@ import CallControlCenter from './components/CallControlCenter.js';
 function App() {
   return (
     <Container maxWidth="100%">
-      <Grid container spacing={3}>
+      <Grid container spacing={1}>
         {/* Subaccount and Phone Number Management */}
-        <Grid item xs={12} md={6} alignSelf="flex-start">
+        <Grid item xs={12} md={12} alignSelf="flex-start">
           <Paper elevation={3} style={{ padding: '20px' }}>
             <SubaccountManagement />
           </Paper>
