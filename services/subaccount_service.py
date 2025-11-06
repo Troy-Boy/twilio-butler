@@ -7,7 +7,24 @@ class SubaccountService:
 		self.client = Client(os.getenv('TWILIO_ACCOUNT_SID'), os.getenv('TWILIO_AUTH_TOKEN'))
 
 	def list_subaccounts(self):
-		return [{"sid":sa.sid, "id": sa.friendly_name} for sa in self.client.api.accounts.list()]
+		subaccounts = self.client.api.accounts.list()
+		result = []
+		
+		for sa in subaccounts:
+			# Check if all phone numbers have emergency addresses registered
+			all_emergencies_registered = self.check_all_emergencies_registered(sa.sid)
+			
+			# Check if HTTP Basic Authentication for media is enabled
+			basic_auth_media = self.check_basic_auth_media(sa.sid)
+			
+			result.append({
+				"sid": sa.sid,
+				"id": sa.friendly_name,
+				"allEmergenciesRegistered": all_emergencies_registered,
+				"basicAuthMedia": basic_auth_media
+			})
+		
+		return result
 
 	def get_subaccount_info(self, subaccount_sid):
 		res = self.client.api.accounts(subaccount_sid).fetch()
@@ -47,6 +64,40 @@ class SubaccountService:
 		})
 
 		return phone_numbers_data
+	
+	def check_all_emergencies_registered(self, subaccount_sid):
+		"""
+		Check if all phone numbers in the subaccount have emergency addresses registered.
+		Returns True if all phone numbers have emergency_address_sid, False otherwise.
+		"""
+		try:
+			phone_numbers_data = self.get_phone_numbers(subaccount_sid)
+			
+			# If there are no phone numbers, return True (vacuous truth)
+			if not phone_numbers_data:
+				return True
+			
+			# Check if all phone numbers have an emergency_address_sid
+			return all(pn.get('emergency_address_sid') for pn in phone_numbers_data)
+		except Exception as e:
+			print(f"Error checking emergency addresses for subaccount {subaccount_sid}: {e}")
+			return False
+	
+	def check_basic_auth_media(self, subaccount_sid):
+		"""
+		Check if HTTP Basic Authentication for media access is enabled for the subaccount.
+		Returns True if enabled, False otherwise.
+		"""
+		try:
+			subaccount = self.get_subaccount_info(subaccount_sid)
+			# The auth_type_calls property indicates if basic auth is required for media
+			# If it's 'any', no authentication is required
+			# If it's 'credential-list' or similar, authentication is enabled
+			auth_type = getattr(subaccount, 'auth_type_calls', None)
+			return auth_type is not None and auth_type != 'any'
+		except Exception as e:
+			print(f"Error checking basic auth media for subaccount {subaccount_sid}: {e}")
+			return False
 	
 	def create_subaccount(self, friendly_name):
 		return self.client.api.accounts.create(friendly_name=friendly_name)

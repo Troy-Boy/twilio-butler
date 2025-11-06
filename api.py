@@ -226,5 +226,16 @@ def delete_message(subaccount_sid):
 	except Exception as e:
 		return jsonify({'error': str(e)}), 500
 
+@app.route('/subaccounts/<subaccount_sid>/<phone_number>/conversations', methods=['GET'])
+def get_conversations(subaccount_sid, phone_number):
+	try:
+		print("PHONE: ", phone_number)
+		# Get the conversations list from the phone number
+		conversations = conversations_service.list_conversations(subaccount_sid,phone_number)
+		
+		return conversations, 200
+	except Exception as e:
+		return jsonify({'error': str(e)}), 500
+
 if __name__ == '__main__':
 	app.run(debug=True)

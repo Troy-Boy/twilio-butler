@@ -1,199 +1,304 @@
 import React, { useState, useEffect } from 'react';
-import { Button, Select, MenuItem, TextField, Typography, Box, List, ListItem, ListItemText, Switch } from '@mui/material';
+import { 
+Typography, Button, TextField, Box, List, ListItem, 
+ListItemText, CircularProgress, Paper, Dialog, 
+DialogTitle, DialogContent, DialogActions, Tab, Tabs,
+Divider, Alert,
+ListItemButton
+} from '@mui/material';
 import axios from 'axios';
+import ConversationsList from './ConversationsList';
 
 function SubaccountManagement() {
-	const [subaccounts, setSubaccounts] = useState([]);
-	const [selectedSubaccount, setSelectedSubaccount] = useState('');
-	const [phoneNumbers, setPhoneNumbers] = useState([]);
-	const [newSubaccount, setNewSubaccount] = useState('');
-	const [closeSubaccount, setCloseSubaccount] = useState(false);
+const [subaccounts, setSubaccounts] = useState([]);
+const [loading, setLoading] = useState(false);
+const [error, setError] = useState(null);
+const [newSubaccountName, setNewSubaccountName] = useState('');
+const [selectedSubaccount, setSelectedSubaccount] = useState(null);
+const [phoneNumbers, setPhoneNumbers] = useState([]);
+const [loadingPhoneNumbers, setLoadingPhoneNumbers] = useState(false);
+const [dialogOpen, setDialogOpen] = useState(false);
+const [tabValue, setTabValue] = useState(0);
+const [selectedPhoneNumber, setSelectedPhoneNumber] = useState(null);
+const [showConversations, setShowConversations] = useState(false);
 
-	useEffect(() => {
-		// Fetch the list of subaccounts on load
-		getSubaccounts()
-	}, []);
+useEffect(() => {
+	fetchSubaccounts();
+}, []);
 
-	const getSubaccounts = () =>{
-		axios.get('http://localhost:5000/subaccounts')
-		.then(response => {
-			setSubaccounts(response.data);
-		})
-		.catch(error => {
-			console.error('Error fetching subaccounts:', error);
-		});
+const fetchSubaccounts = async () => {
+	setLoading(true);
+	setError(null);
+	try {
+	const response = await axios.get('http://localhost:5000/subaccounts');
+	setSubaccounts(response.data);
+	} catch (err) {
+	console.error('Error fetching subaccounts:', err);
+	setError('Failed to fetch subaccounts. Please try again.');
+	} finally {
+	setLoading(false);
 	}
+};
 
-	const handleSubaccountChange = (event) => {
-		const subaccount = event.target.value;
-		getSubaccount(subaccount);
-		// Fetch phone numbers for selected subaccount
-		axios.get(`http://localhost:5000/subaccounts/${subaccount}/phone-numbers`)
-		.then(response => {
-			setPhoneNumbers(response.data);
-		})
-		.catch(error => {
-			console.error('Error fetching phone numbers:', error);
-		});
-	};
-
-	const handleCreateSubaccount = () => {
-		// Create a new subaccount
-		axios.post('http://localhost:5000/subaccounts', { friendly_name: newSubaccount })
-		.then(response => {
-			setSubaccounts([...subaccounts, response.data]);
-			setNewSubaccount('');  // Reset input
-		})
-		.catch(error => {
-			console.error('Error creating subaccount:', error);
-		});
-	};
+const handleCreateSubaccount = async () => {
+	if (!newSubaccountName) return;
 	
-	const handleReleasePhoneNumber = (phone_sid) => {
-		// Create a new subaccount
-		axios.delete(`http://localhost:5000/subaccounts/${selectedSubaccount.sid}/${phone_sid}`)
-		.then(response => {
-			handleSubaccountChange(selectedSubaccount);
-			console.log(response.data);
-			// getSubaccounts();
-			// getSubaccount(selectedSubaccount);
-		})
-		.catch(error => {
-			console.error('Error removing phone number:', error);
-		});
-	};
-	
-	const handleDeleteSubaccount = () => {
-		// Create a new subaccount
-		console.log('sending phone number: ' + selectedSubaccount.sid);
-		axios.delete(`http://localhost:5000/subaccounts/${selectedSubaccount.sid}`, {
-			headers: {
-				'Content-Type': 'application/json'
-			},
-			data: {
-				closed: newSubaccount
-			}
-		})
-		.then(response => {
-			getSubaccounts();
-			setSelectedSubaccount('');  // Reset selected subaccount
-		})
-		.catch(error => {
-			console.error('Error removing subaccounts', error);
-		});
-	};
-
-	const getSubaccount = (subaccount_sid) => {
-		// Get a subaccount
-		axios.get(`http://localhost:5000/subaccounts/${subaccount_sid}`)
-		.then(response => {
-			setSelectedSubaccount(response.data);
-		})
-		.catch(error => {
-			console.error('Error getting subaccount:', error);
-		});
+	setLoading(true);
+	setError(null);
+	try {
+	const response = await axios.post('http://localhost:5000/subaccounts', {
+		friendly_name: newSubaccountName
+	});
+	setSubaccounts([...subaccounts, response.data]);
+	setNewSubaccountName('');
+	} catch (err) {
+	console.error('Error creating subaccount:', err);
+	setError('Failed to create subaccount. Please try again.');
+	} finally {
+	setLoading(false);
 	}
+};
 
-	return (
-		<Box>
-			<Typography variant="h5">Subaccount Management</Typography>
+const getSubaccount = async (subaccount_sid) => {
+	// Get a subaccount
+	try {
+		const response = await axios.get(`http://localhost:5000/subaccounts/${subaccount_sid}`);
+		console.log('Subaccount details:', response.data);
+		setSelectedSubaccount(response.data);
+	} catch (err) {
+		console.error('Error getting subaccount:', err);
+		setError('Failed to get subaccount. Please try again.');
+	}
+};
 
-			{/* Create Subaccount */}
-			<Box mt={3} mb={3}>
-				<TextField
-				label="New Subaccount Name"
-				variant="outlined"
-				fullWidth
-				value={newSubaccount}
-				onChange={(e) => setNewSubaccount(e.target.value)}
-				/>
-				<Button variant="contained" color="primary" onClick={handleCreateSubaccount} fullWidth style={{ marginTop: '10px' }}>
-					Create Subaccount
-				</Button>
-			</Box>
+const handleSubaccountSelect = async (subaccount) => {
+	getSubaccount(subaccount.sid);
+	fetchPhoneNumbers(subaccount);
+	setTabValue(0);
+	setShowConversations(false);
+};
 
-			{/* Select Subaccount */}
-			<Select
-				defaultValue=''
-				value={selectedSubaccount.sid}
-				onChange={handleSubaccountChange}
-				displayEmpty
-				fullWidth
-			>
-				<MenuItem value="" disabled>Select Subaccount</MenuItem>
-				{subaccounts.map(sub => (
-				<MenuItem key={sub.sid} value={sub.sid}>{sub.id}</MenuItem>
-				))}
-			</Select>
-			{selectedSubaccount ? (
-				<Box mt={3}>
-					{/* Subaccount Information */}
-					<Box>
-						<Typography variant="h6">Selected Subaccount Information</Typography>
-						{/* Display subaccount details here */}
-					</Box>
+const fetchPhoneNumbers = async (subaccount) => {
+	setLoadingPhoneNumbers(true);
+	try {
+	const response = await axios.get(`http://localhost:5000/subaccounts/${subaccount.sid}/phone-numbers`);
+	setPhoneNumbers(response.data);
+	} catch (err) {
+	console.error('Error fetching phone numbers:', err);
+	} finally {
+	setLoadingPhoneNumbers(false);
+	}
+};
 
-					{/* Phone Numbers */}
-					<Box mt={3}>
-						<Typography variant="h6">Phone Numbers</Typography>
-						<List>
-						{phoneNumbers.map(phone => (
-							<ListItem key={phone.sid}>
-							<ListItemText primary={phone.phone_number} />
-							<Button variant="outlined" color="secondary" onClick={() => handleReleasePhoneNumber(phone.sid)}>
-								Release
-							</Button>
-							</ListItem>
-						))}
-						</List>
-					</Box>
-					<Box mt={5}>
-						<Typography variant="h6">Subaccount</Typography>
-						<List>
-							<ListItem>
-								<ListItemText primary={`Friendly Name: ${selectedSubaccount.friendly_name}`} />
-							</ListItem>
-							<ListItem>
-								<ListItemText primary={`Account SID: ${selectedSubaccount.sid}`} />
-							</ListItem>
-							<ListItem>
-								<ListItemText primary={`Subaccount SID: ${selectedSubaccount.sid}`} />
-							</ListItem>
-							<ListItem>
-								<ListItemText primary={`Date Created: ${selectedSubaccount.date_created}`} />
-							</ListItem>
-							<ListItem>
-								<ListItemText primary={`Date Updated: ${selectedSubaccount.date_updated}`} />
-							</ListItem>
-							<ListItem>
-								<ListItemText primary={`Status: ${selectedSubaccount.status}`} />
-							</ListItem>
-							<ListItem>
-								<ListItemText primary={`Parent Account SID: ${selectedSubaccount.owner_account_sid}`} />
-							</ListItem>
-						</List> 
-					</Box>
-					<Switch
-						checked={closeSubaccount}
-						onChange={() => setCloseSubaccount(!closeSubaccount)} // Toggle state
-						color="primary"
-					/>
-					{closeSubaccount ? (
-						<Typography variant="body1" mt={3}>Close subaccount completely</Typography>
-					) : (
-						<Typography variant="body1" mt={3}>Release all phone numbers</Typography>
-					)}
-					<Box mt={5}>
-						<Button variant="outlined" color="secondary" onClick={() => handleDeleteSubaccount()}>
-							Close subaccount
-						</Button>
-					</Box>
-				</Box>
-				) : (
-					<Typography variant="body1" mt={3}>Please select a subaccount to view details.</Typography>
-				)}
+const handleDeleteSubaccount = (subaccount) => {
+	setDialogOpen(true);
+};
+
+const confirmDelete = async () => {
+	try {
+	await axios.delete(`http://localhost:5000/subaccounts/${selectedSubaccount.sid}`, {
+		data: { closed: true }
+	});
+	setSubaccounts(subaccounts.filter(s => s.sid !== selectedSubaccount.sid));
+	setSelectedSubaccount(null);
+	setPhoneNumbers([]);
+	setDialogOpen(false);
+	} catch (err) {
+	console.error('Error deleting subaccount:', err);
+	setError('Failed to delete subaccount. Please try again.');
+	}
+};
+
+const handleReleasePhoneNumber = async (phoneNumberSid) => {
+	try {
+	await axios.delete(`http://localhost:5000/subaccounts/${selectedSubaccount.sid}/${phoneNumberSid}`);
+	// Refresh phone numbers list
+	fetchPhoneNumbers(selectedSubaccount);
+	} catch (err) {
+	console.error('Error releasing phone number:', err);
+	}
+};
+
+const handleShowConversations = (phoneNumber) => {
+	setSelectedPhoneNumber(phoneNumber);
+	setShowConversations(true);
+	setTabValue(1);
+};
+
+const handleTabChange = (event, newValue) => {
+	setTabValue(newValue);
+};
+
+return (
+	<Box>
+	<Typography variant="h5" component="h2" gutterBottom>
+		Subaccount Management
+	</Typography>
+
+	<Box display="flex" mb={2}>
+		<TextField
+		label="New Subaccount Name"
+		variant="outlined"
+		size="small"
+		value={newSubaccountName}
+		onChange={(e) => setNewSubaccountName(e.target.value)}
+		sx={{ flexGrow: 1, mr: 2 }}
+		/>
+		<Button
+		variant="contained"
+		color="primary"
+		onClick={handleCreateSubaccount}
+		disabled={loading || !newSubaccountName}
+		>
+		Create Subaccount
+		</Button>
+	</Box>
+
+	{error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
+
+	<Paper elevation={2} sx={{ maxHeight: 300, overflow: 'auto', mb: 2 }}>
+		<Typography variant="h6" sx={{ p: 2 }}>Subaccounts</Typography>
+		<Divider />
+		{loading ? (
+		<Box display="flex" justifyContent="center" alignItems="center" minHeight="200px">
+			<CircularProgress />
 		</Box>
-	);
+		) : (
+		<List>
+			{subaccounts.map(subaccount => (
+			<React.Fragment key={subaccount.sid}>
+				<ListItemButton onClick={() => handleSubaccountSelect(subaccount)}>
+				<ListItemText
+					primary={`friendlyName: ${subaccount.id}`}
+					secondary={`SID: ${subaccount.sid}`}
+				/>
+				<Button 
+					variant="outlined" 
+					color="error" 
+					onClick={(e) => {
+					e.stopPropagation();
+					handleDeleteSubaccount(subaccount);
+					}}
+				>
+					Delete
+				</Button>
+				</ListItemButton>
+				<Divider />
+			</React.Fragment>
+			))}
+		</List>
+		)}
+	</Paper>
+
+	{selectedSubaccount && (
+		<Box mt={4}>
+		<Typography variant="h6" gutterBottom>
+			Selected Subaccount: {selectedSubaccount.friendly_name}
+		</Typography>
+		<List>
+			<ListItem>
+				<ListItemText>
+					SID: {selectedSubaccount.sid}
+				</ListItemText>
+			</ListItem>
+			<ListItem>
+				<ListItemText>
+					Status: {selectedSubaccount.status}
+				</ListItemText>
+			</ListItem>
+			<ListItem>
+				<ListItemText>
+					Date created: {selectedSubaccount.date_created}
+				</ListItemText>
+			</ListItem>
+			<ListItem>
+				<ListItemText>
+					Date updated: {selectedSubaccount.date_updated}
+				</ListItemText>
+			</ListItem>
+		</List>
+
+		<Tabs value={tabValue} onChange={handleTabChange} sx={{ mb: 2 }}>
+			<Tab label="Phone Numbers" />
+			{showConversations && <Tab label="Conversations" />}
+		</Tabs>
+
+		{tabValue === 0 && (
+			<Paper elevation={2} sx={{ maxHeight: 300, overflow: 'auto' }}>
+			<Typography variant="subtitle1" sx={{ p: 2 }}>Phone Numbers</Typography>
+			<Divider />
+			{loadingPhoneNumbers ? (
+				<Box display="flex" justifyContent="center" alignItems="center" minHeight="200px">
+				<CircularProgress />
+				</Box>
+			) : (
+				<List>
+				{phoneNumbers.length === 0 ? (
+					<ListItem>
+					<ListItemText primary="No phone numbers found for this subaccount." />
+					</ListItem>
+				) : (
+					phoneNumbers.map(number => (
+					<React.Fragment key={number.sid}>
+						<ListItem>
+						<ListItemText 
+							primary={number.phone_number} 
+							secondary={`SID: ${number.sid}`} 
+						/>
+						<Button 
+							variant="outlined" 
+							color="primary" 
+							onClick={() => handleShowConversations(number)}
+							sx={{ mr: 1 }}
+						>
+							Conversations
+						</Button>
+						<Button 
+							variant="outlined" 
+							color="error" 
+							onClick={() => handleReleasePhoneNumber(number.sid)}
+						>
+							Release
+						</Button>
+						</ListItem>
+						<Divider />
+					</React.Fragment>
+					))
+				)}
+				</List>
+			)}
+			</Paper>
+		)}
+
+		{tabValue === 1 && showConversations && selectedPhoneNumber && (
+			<ConversationsList 
+			selectedSubaccount={selectedSubaccount}
+			phoneNumber={selectedPhoneNumber}
+			/>
+		)}
+		</Box>
+	)}
+
+	<Dialog
+		open={dialogOpen}
+		onClose={() => setDialogOpen(false)}
+	>
+		<DialogTitle>Confirm Deletion</DialogTitle>
+		<DialogContent>
+		<Typography>
+			Are you sure you want to delete the subaccount "{selectedSubaccount?.friendly_name}"? 
+			This will release all associated phone numbers and cannot be undone.
+		</Typography>
+		</DialogContent>
+		<DialogActions>
+		<Button onClick={() => setDialogOpen(false)}>Cancel</Button>
+		<Button onClick={confirmDelete} color="error" variant="contained">
+			Delete
+		</Button>
+		</DialogActions>
+	</Dialog>
+	</Box>
+);
 }
 
 export default SubaccountManagement;
