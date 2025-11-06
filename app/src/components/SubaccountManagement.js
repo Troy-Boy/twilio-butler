@@ -21,6 +21,7 @@ const [dialogOpen, setDialogOpen] = useState(false);
 const [tabValue, setTabValue] = useState(0);
 const [selectedPhoneNumber, setSelectedPhoneNumber] = useState(null);
 const [showConversations, setShowConversations] = useState(false);
+const [filterMissingEmergency, setFilterMissingEmergency] = useState(false);
 
 useEffect(() => {
 	fetchSubaccounts();
@@ -82,7 +83,7 @@ const getSubaccount = async (subaccount_sid) => {
 	// Get a subaccount
 	try {
 		const response = await axios.get(`http://localhost:5000/subaccounts/${subaccount_sid}`);
-		console.log('Subaccount details:', response.data);
+		// console.log('Subaccount details:', response.data);
 		setSelectedSubaccount(response.data);
 	} catch (err) {
 		console.error('Error getting subaccount:', err);
@@ -148,6 +149,25 @@ const handleTabChange = (event, newValue) => {
 	setTabValue(newValue);
 };
 
+// Filter and sort subaccounts based on emergency filter
+const getFilteredAndSortedSubaccounts = () => {
+	let filtered = [...subaccounts];
+	
+	// Sort: if filter is active, show missing emergency first
+	// Otherwise, show missing emergency first anyway for visibility
+	filtered.sort((a, b) => {
+		// Handle null values (still loading)
+		if (a.allEmergenciesRegistered === null) return 1;
+		if (b.allEmergenciesRegistered === null) return -1;
+		
+		// Sort by emergency status (false/missing first)
+		if (a.allEmergenciesRegistered === b.allEmergenciesRegistered) return 0;
+		return a.allEmergenciesRegistered ? 1 : -1;
+	});
+	
+	return filtered;
+};
+
 return (
 	<Box>
 	<Typography variant="h5" component="h2" gutterBottom>
@@ -175,70 +195,139 @@ return (
 
 	{error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
 
-	<Paper elevation={2} sx={{ maxHeight: 300, overflow: 'auto', mb: 2 }}>
-		<Box sx={{ p: 2, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-			<Typography variant="h6">Subaccounts</Typography>
-			<Box sx={{ display: 'flex', gap: 2, mr: 10 }}>
-				<Typography variant="caption" sx={{ minWidth: 80, textAlign: 'center' }}>
-					Emergency Addr.
-				</Typography>
-				<Typography variant="caption" sx={{ minWidth: 80, textAlign: 'center' }}>
-					Basic Auth
+	<Paper elevation={0} sx={{ borderRadius: 2, border: '1px solid #e0e0e0', mb: 2 }}>
+		<Box sx={{ p: 2.5, display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid #f5f5f5' }}>
+			<Typography variant="h6" sx={{ fontWeight: 500 }}>Subaccounts</Typography>
+			<Box sx={{ display: 'flex', gap: 3, mr: 10, alignItems: 'center' }}>
+				<Box 
+					onClick={() => setFilterMissingEmergency(!filterMissingEmergency)}
+					sx={{ 
+						display: 'flex', 
+						alignItems: 'center', 
+						gap: 0.5,
+						cursor: 'pointer',
+						userSelect: 'none',
+						'&:hover': {
+							opacity: 0.7
+						}
+					}}
+				>
+					<Typography 
+						variant="caption" 
+						sx={{ 
+							minWidth: 70, 
+							textAlign: 'center', 
+							color: filterMissingEmergency ? '#f44336' : 'text.secondary', 
+							fontWeight: filterMissingEmergency ? 600 : 500,
+							transition: 'all 0.2s'
+						}}
+					>
+						Emergency
+					</Typography>
+					{filterMissingEmergency && (
+						<Chip 
+							label="Missing Only" 
+							size="small"
+							color="error"
+							sx={{ 
+								height: 20,
+								fontSize: '0.65rem',
+								fontWeight: 600
+							}}
+						/>
+					)}
+				</Box>
+				<Typography variant="caption" sx={{ minWidth: 70, textAlign: 'center', color: 'text.secondary', fontWeight: 500 }}>
+					Auth
 				</Typography>
 			</Box>
 		</Box>
-		<Divider />
 		{loading ? (
 		<Box display="flex" justifyContent="center" alignItems="center" minHeight="200px">
 			<CircularProgress />
 		</Box>
 		) : (
-		<List>
-			{subaccounts.map(subaccount => (
+		<List sx={{ maxHeight: 400, overflow: 'auto', p: 0 }}>
+			{getFilteredAndSortedSubaccounts()
+				.filter(subaccount => !filterMissingEmergency || subaccount.allEmergenciesRegistered === false)
+				.map((subaccount, index) => (
 			<React.Fragment key={subaccount.sid}>
-				<ListItemButton onClick={() => handleSubaccountSelect(subaccount)}>
-				<ListItemText
-					primary={`friendlyName: ${subaccount.id}`}
-					secondary={`SID: ${subaccount.sid}`}
-				/>
-				<Chip 
-					label={subaccount.allEmergenciesRegistered === null ? '...' : 'E'}
-					size="small"
+				<ListItemButton 
+					onClick={() => handleSubaccountSelect(subaccount)}
 					sx={{ 
-						mr: 1,
-						backgroundColor: subaccount.allEmergenciesRegistered === null 
-							? '#9e9e9e' 
-							: subaccount.allEmergenciesRegistered ? '#4caf50' : '#f44336',
-						color: 'white',
-						fontWeight: 'bold',
-						minWidth: 40
-					}}
-				/>
-				<Chip 
-					label={subaccount.basicAuthMedia === null ? '...' : 'A'}
-					size="small"
-					sx={{ 
-						mr: 2,
-						backgroundColor: subaccount.basicAuthMedia === null 
-							? '#9e9e9e' 
-							: subaccount.basicAuthMedia ? '#4caf50' : '#f44336',
-						color: 'white',
-						fontWeight: 'bold',
-						minWidth: 40
-					}}
-				/>
-				<Button 
-					variant="outlined" 
-					color="error" 
-					onClick={(e) => {
-					e.stopPropagation();
-					handleDeleteSubaccount(subaccount);
+						py: 2, 
+						px: 2.5,
+						'&:hover': { 
+							backgroundColor: '#f8f9fa' 
+						},
+						transition: 'background-color 0.2s'
 					}}
 				>
-					Delete
-				</Button>
+				<ListItemText
+					primary={subaccount.id}
+					secondary={subaccount.sid}
+					primaryTypographyProps={{ 
+						fontWeight: 500,
+						fontSize: '0.95rem'
+					}}
+					secondaryTypographyProps={{
+						fontFamily: 'monospace',
+						fontSize: '0.7rem',
+						color: 'text.secondary'
+					}}
+				/>
+				<Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+					<Chip 
+						label={subaccount.allEmergenciesRegistered === null ? '•••' : 'E'}
+						size="small"
+						sx={{ 
+							backgroundColor: subaccount.allEmergenciesRegistered === null 
+								? '#e0e0e0' 
+								: subaccount.allEmergenciesRegistered ? '#4caf50' : '#f44336',
+							color: 'white',
+							fontWeight: 600,
+							minWidth: 36,
+							height: 28,
+							borderRadius: 2,
+							fontSize: '0.75rem'
+						}}
+					/>
+					<Chip 
+						label={subaccount.basicAuthMedia === null ? '•••' : 'A'}
+						size="small"
+						sx={{ 
+							mr: 1,
+							backgroundColor: subaccount.basicAuthMedia === null 
+								? '#e0e0e0' 
+								: subaccount.basicAuthMedia ? '#4caf50' : '#f44336',
+							color: 'white',
+							fontWeight: 600,
+							minWidth: 36,
+							height: 28,
+							borderRadius: 2,
+							fontSize: '0.75rem'
+						}}
+					/>
+					<Button 
+						variant="outlined" 
+						color="error" 
+						size="small"
+						onClick={(e) => {
+							e.stopPropagation();
+							handleDeleteSubaccount(subaccount);
+						}}
+						sx={{ 
+							borderRadius: 2,
+							textTransform: 'none',
+							fontWeight: 500,
+							px: 2
+						}}
+					>
+						Delete
+					</Button>
+				</Box>
 				</ListItemButton>
-				<Divider />
+				{index < getFilteredAndSortedSubaccounts().filter(sa => !filterMissingEmergency || sa.allEmergenciesRegistered === false).length - 1 && <Divider sx={{ mx: 2.5 }} />}
 			</React.Fragment>
 			))}
 		</List>
@@ -318,60 +407,95 @@ return (
 				</Tabs>
 
 				{tabValue === 0 && (
-					<Paper elevation={2} sx={{ maxHeight: 400, overflow: 'auto' }}>
-					<Box sx={{ p: 2, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-						<Typography variant="subtitle1">Phone Numbers</Typography>
-						<Typography variant="caption" sx={{ mr: 18 }}>
-							Emergency Addr.
+					<Paper elevation={0} sx={{ borderRadius: 2, border: '1px solid #e0e0e0' }}>
+					<Box sx={{ p: 2.5, display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid #f5f5f5' }}>
+						<Typography variant="h6" sx={{ fontWeight: 500, fontSize: '1rem' }}>Phone Numbers</Typography>
+						<Typography variant="caption" sx={{ mr: 16, color: 'text.secondary', fontWeight: 500 }}>
+							Emergency
 						</Typography>
 					</Box>
-					<Divider />
 					{loadingPhoneNumbers ? (
 						<Box display="flex" justifyContent="center" alignItems="center" minHeight="200px">
 						<CircularProgress />
 						</Box>
 					) : (
-						<List>
+						<List sx={{ maxHeight: 400, overflow: 'auto', p: 0 }}>
 						{phoneNumbers.length === 0 ? (
-							<ListItem>
-							<ListItemText primary="No phone numbers found for this subaccount." />
+							<ListItem sx={{ py: 3 }}>
+							<ListItemText 
+								primary="No phone numbers found for this subaccount."
+								primaryTypographyProps={{ 
+									color: 'text.secondary',
+									textAlign: 'center'
+								}}
+							/>
 							</ListItem>
 						) : (
-							phoneNumbers.map(number => (
+							phoneNumbers.map((number, index) => (
 							<React.Fragment key={number.sid}>
-								<ListItem>
-								<ListItemText 
-									primary={number.phone_number} 
-									secondary={`SID: ${number.sid}`} 
-								/>
-								<Chip 
-									label="E" 
-									size="small"
+								<ListItem
 									sx={{ 
-										mr: 1,
-										backgroundColor: number.emergency_address_sid ? '#4caf50' : '#f44336',
-										color: 'white',
-										fontWeight: 'bold',
-										minWidth: 40
+										py: 2, 
+										px: 2.5,
+										'&:hover': { 
+											backgroundColor: '#f8f9fa' 
+										},
+										transition: 'background-color 0.2s'
+									}}
+								>
+								<ListItemText 
+									primary={number.phone_number}
+									primaryTypographyProps={{ 
+										fontWeight: 500,
+										fontSize: '0.95rem',
+										fontFamily: 'monospace'
 									}}
 								/>
-								<Button 
-									variant="outlined" 
-									color="primary" 
-									onClick={() => handleShowConversations(number)}
-									sx={{ mr: 1 }}
-								>
-									Conversations
-								</Button>
-								<Button 
-									variant="outlined" 
-									color="error" 
-									onClick={() => handleReleasePhoneNumber(number.sid)}
-								>
-									Release
-								</Button>
+								<Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+									<Chip 
+										label="E" 
+										size="small"
+										sx={{ 
+											backgroundColor: number.emergency_address_sid ? '#4caf50' : '#f44336',
+											color: 'white',
+											fontWeight: 600,
+											minWidth: 36,
+											height: 28,
+											borderRadius: 2,
+											fontSize: '0.75rem'
+										}}
+									/>
+									<Button 
+										variant="outlined" 
+										color="primary"
+										size="small"
+										onClick={() => handleShowConversations(number)}
+										sx={{ 
+											borderRadius: 2,
+											textTransform: 'none',
+											fontWeight: 500,
+											px: 2
+										}}
+									>
+										Conversations
+									</Button>
+									<Button 
+										variant="outlined" 
+										color="error"
+										size="small"
+										onClick={() => handleReleasePhoneNumber(number.sid)}
+										sx={{ 
+											borderRadius: 2,
+											textTransform: 'none',
+											fontWeight: 500,
+											px: 2
+										}}
+									>
+										Release
+									</Button>
+								</Box>
 								</ListItem>
-								<Divider />
+								{index < phoneNumbers.length - 1 && <Divider sx={{ mx: 2.5 }} />}
 							</React.Fragment>
 							))
 						)}

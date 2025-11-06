@@ -33,7 +33,6 @@ def list_subaccounts():
 def get_subaccount(subaccount_sid):
 	try:
 		subaccount_info = subaccount_service.get_subaccount_info(subaccount_sid)
-		print(subaccount_info)
 		# Convert the AccountInstance object to a dictionary and add badge fields
 		subaccount_data = extract_subaccount_data(subaccount_info['account_instance'])
 		subaccount_data['allEmergenciesRegistered'] = subaccount_info['allEmergenciesRegistered']
@@ -93,7 +92,6 @@ def delete_subaccount(subaccount_sid):
 	try:
 		data = request.json
 		closed = data.get('closed')
-		print('=============we are here=================')
 		updated_subaccount = subaccount_service.close_subaccount(subaccount_sid, closed)
 		
 		# Return a confirmation message
@@ -110,7 +108,6 @@ def delete_subaccount(subaccount_sid):
 @app.route('/subaccounts/<subaccount_sid>/<phone_number_sid>', methods=['DELETE'])
 def delete_phone_number(subaccount_sid, phone_number_sid):
 	try:
-		print('========== deleting phone number ===========')
 		res = subaccount_service.release_phone_number(subaccount_sid, phone_number_sid)
 		# Return a confirmation message
 		return jsonify({

@@ -24,8 +24,7 @@ class PhoneNumberService:
 
 		for number in phone_numbers:
 			# Release each phone number
-			message = self.release_phone_number(number['sid'])
-			print(message)
+			self.release_phone_number(number['sid'])
 			   
 	def buy_phone_number(self, subaccount_sid, phone_number):
 		subaccount_client = Client(subaccount_sid, os.getenv('TWILIO_AUTH_TOKEN'))
@@ -33,7 +32,6 @@ class PhoneNumberService:
 
 	def release_phone_number(self, phone_number_sid):
 	   # Release the phone number (delete it)
-		print('here 3' + phone_number_sid)
 		phone_number = self.client.incoming_phone_numbers(phone_number_sid).fetch()
 		# First, remove the emergency address before releasing the number
 		self.remove_emergency_address(phone_number_sid)
