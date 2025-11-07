@@ -1,10 +1,10 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { 
-Typography, Button, TextField, Box, List, ListItem, 
+Typography, Button, Box, List, ListItem, 
 ListItemText, CircularProgress, Paper, Dialog, 
 DialogTitle, DialogContent, DialogActions, Tab, Tabs,
 Divider, Alert,
-ListItemButton, Chip
+ListItemButton, Chip, Pagination
 } from '@mui/material';
 import axios from 'axios';
 import ConversationsList from './ConversationsList';
@@ -22,6 +22,11 @@ const [tabValue, setTabValue] = useState(0);
 const [selectedPhoneNumber, setSelectedPhoneNumber] = useState(null);
 const [showConversations, setShowConversations] = useState(false);
 const [filterMissingEmergency, setFilterMissingEmergency] = useState(false);
+const [deleteMode, setDeleteMode] = useState(false);
+const [currentPage, setCurrentPage] = useState(1);
+const [itemsPerPage] = useState(10);
+const badgesLoadedRef = useRef(new Set());
+const isFetchingRef = useRef(new Set());
 
 useEffect(() => {
 	fetchSubaccounts();
@@ -33,31 +38,53 @@ const fetchSubaccounts = async () => {
 	try {
 		const response = await axios.get('http://localhost:5000/subaccounts');
 		setSubaccounts(response.data);
-		
-		// Fetch badge data in the background for each subaccount
-		response.data.forEach(async (subaccount) => {
-			if (subaccount.allEmergenciesRegistered === null || subaccount.basicAuthMedia === null) {
-				try {
-					const badgeResponse = await axios.get(`http://localhost:5000/subaccounts/${subaccount.sid}/badges`);
-					// Update the subaccount with badge data
-					setSubaccounts(prevSubaccounts => 
-						prevSubaccounts.map(sa => 
-							sa.sid === subaccount.sid 
-								? { ...sa, ...badgeResponse.data }
-								: sa
-						)
-					);
-				} catch (err) {
-					console.error(`Error fetching badges for ${subaccount.sid}:`, err);
-				}
-			}
-		});
 	} catch (err) {
 		console.error('Error fetching subaccounts:', err);
 		setError('Failed to fetch subaccounts. Please try again.');
 	} finally {
 		setLoading(false);
 	}
+};
+
+// Fetch badge data only for visible page items
+const fetchBadgesForPage = async (pageSubaccounts) => {
+	// Use Promise.all to properly handle async operations
+	await Promise.all(
+		pageSubaccounts.map(async (subaccount) => {
+			// Skip if already loaded or currently being fetched
+			if (badgesLoadedRef.current.has(subaccount.sid) || isFetchingRef.current.has(subaccount.sid)) {
+				return;
+			}
+			
+			// Skip if badge data already exists
+			if (subaccount.allEmergenciesRegistered !== null && subaccount.basicAuthMedia !== null) {
+				badgesLoadedRef.current.add(subaccount.sid);
+				return;
+			}
+			
+			// Mark as currently fetching
+			isFetchingRef.current.add(subaccount.sid);
+			
+			try {
+				const badgeResponse = await axios.get(`http://localhost:5000/subaccounts/${subaccount.sid}/badges`);
+				// Update the subaccount with badge data
+				setSubaccounts(prevSubaccounts => 
+					prevSubaccounts.map(sa => 
+						sa.sid === subaccount.sid 
+							? { ...sa, ...badgeResponse.data }
+							: sa
+					)
+				);
+				// Mark as loaded
+				badgesLoadedRef.current.add(subaccount.sid);
+			} catch (err) {
+				console.error(`Error fetching badges for ${subaccount.sid}:`, err);
+			} finally {
+				// Remove from fetching set
+				isFetchingRef.current.delete(subaccount.sid);
+			}
+		})
+	);
 };
 
 // const handleCreateSubaccount = async () => {
@@ -153,8 +180,12 @@ const handleTabChange = (event, newValue) => {
 const getFilteredAndSortedSubaccounts = () => {
 	let filtered = [...subaccounts];
 	
-	// Sort: if filter is active, show missing emergency first
-	// Otherwise, show missing emergency first anyway for visibility
+	// Apply emergency filter if active
+	if (filterMissingEmergency) {
+		filtered = filtered.filter(sa => sa.allEmergenciesRegistered === false);
+	}
+	
+	// Sort: show missing emergency first for visibility
 	filtered.sort((a, b) => {
 		// Handle null values (still loading)
 		if (a.allEmergenciesRegistered === null) return 1;
@@ -167,6 +198,41 @@ const getFilteredAndSortedSubaccounts = () => {
 	
 	return filtered;
 };
+
+// Paginate the filtered/sorted results
+const getPaginatedSubaccounts = () => {
+	const filtered = getFilteredAndSortedSubaccounts();
+	const startIndex = (currentPage - 1) * itemsPerPage;
+	const endIndex = startIndex + itemsPerPage;
+	return filtered.slice(startIndex, endIndex);
+};
+
+// Handle page change and fetch badges for new page
+const handlePageChange = (event, value) => {
+	setCurrentPage(value);
+};
+
+// Fetch badges when page changes or filter changes
+useEffect(() => {
+	if (subaccounts.length > 0) {
+		const pageSubaccounts = getPaginatedSubaccounts();
+		if (pageSubaccounts.length > 0) {
+			fetchBadgesForPage(pageSubaccounts);
+		}
+	}
+	// eslint-disable-next-line react-hooks/exhaustive-deps
+}, [currentPage, filterMissingEmergency]); // Removed subaccounts from dependencies to prevent infinite loop
+
+// Initial fetch of badges when subaccounts first load
+useEffect(() => {
+	if (subaccounts.length > 0 && badgesLoadedRef.current.size === 0) {
+		const pageSubaccounts = getPaginatedSubaccounts();
+		if (pageSubaccounts.length > 0) {
+			fetchBadgesForPage(pageSubaccounts);
+		}
+	}
+	// eslint-disable-next-line react-hooks/exhaustive-deps
+}, [subaccounts.length]); // Only trigger when length changes (initial load)
 
 return (
 	<Box>
@@ -200,7 +266,10 @@ return (
 			<Typography variant="h6" sx={{ fontWeight: 500 }}>Subaccounts</Typography>
 			<Box sx={{ display: 'flex', gap: 3, mr: 10, alignItems: 'center' }}>
 				<Box 
-					onClick={() => setFilterMissingEmergency(!filterMissingEmergency)}
+					onClick={() => {
+						setFilterMissingEmergency(!filterMissingEmergency);
+						setCurrentPage(1); // Reset to first page when filter changes
+					}}
 					sx={{ 
 						display: 'flex', 
 						alignItems: 'center', 
@@ -240,6 +309,56 @@ return (
 				<Typography variant="caption" sx={{ minWidth: 70, textAlign: 'center', color: 'text.secondary', fontWeight: 500 }}>
 					Auth
 				</Typography>
+				<Box 
+					onClick={() => setDeleteMode(!deleteMode)}
+					sx={{ 
+						display: 'flex', 
+						alignItems: 'center', 
+						gap: 0.5,
+						cursor: 'pointer',
+						userSelect: 'none',
+						'&:hover': {
+							opacity: 0.7
+						}
+					}}
+				>
+					<Typography 
+						variant="caption" 
+						sx={{ 
+							minWidth: 50, 
+							textAlign: 'center', 
+							color: deleteMode ? '#f44336' : 'text.secondary', 
+							fontWeight: deleteMode ? 600 : 500,
+							transition: 'all 0.2s'
+						}}
+					>
+						Delete
+					</Typography>
+					{deleteMode && (
+						<Chip 
+							label="Mode" 
+							size="small"
+							color="error"
+							sx={{ 
+								height: 20,
+								fontSize: '0.65rem',
+								fontWeight: 600
+							}}
+						/>
+					)}
+				</Box>
+				<Chip 
+					label={getFilteredAndSortedSubaccounts().length}
+					size="small"
+					sx={{ 
+						backgroundColor: '#e3f2fd',
+						color: '#1976d2',
+						fontWeight: 600,
+						minWidth: 36,
+						height: 24,
+						fontSize: '0.75rem'
+					}}
+				/>
 			</Box>
 		</Box>
 		{loading ? (
@@ -247,10 +366,9 @@ return (
 			<CircularProgress />
 		</Box>
 		) : (
+		<>
 		<List sx={{ maxHeight: 400, overflow: 'auto', p: 0 }}>
-			{getFilteredAndSortedSubaccounts()
-				.filter(subaccount => !filterMissingEmergency || subaccount.allEmergenciesRegistered === false)
-				.map((subaccount, index) => (
+			{getPaginatedSubaccounts().map((subaccount, index) => (
 			<React.Fragment key={subaccount.sid}>
 				<ListItemButton 
 					onClick={() => handleSubaccountSelect(subaccount)}
@@ -296,7 +414,7 @@ return (
 						label={subaccount.basicAuthMedia === null ? '•••' : 'A'}
 						size="small"
 						sx={{ 
-							mr: 1,
+							mr: deleteMode ? 1 : 0,
 							backgroundColor: subaccount.basicAuthMedia === null 
 								? '#e0e0e0' 
 								: subaccount.basicAuthMedia ? '#4caf50' : '#f44336',
@@ -308,29 +426,41 @@ return (
 							fontSize: '0.75rem'
 						}}
 					/>
-					<Button 
-						variant="outlined" 
-						color="error" 
-						size="small"
-						onClick={(e) => {
-							e.stopPropagation();
-							handleDeleteSubaccount(subaccount);
-						}}
-						sx={{ 
-							borderRadius: 2,
-							textTransform: 'none',
-							fontWeight: 500,
-							px: 2
-						}}
-					>
-						Delete
-					</Button>
+					{deleteMode && (
+						<Button 
+							variant="outlined" 
+							color="error" 
+							size="small"
+							onClick={(e) => {
+								e.stopPropagation();
+								handleDeleteSubaccount(subaccount);
+							}}
+							sx={{ 
+								borderRadius: 2,
+								textTransform: 'none',
+								fontWeight: 500,
+								px: 2
+							}}
+						>
+							Delete
+						</Button>
+					)}
 				</Box>
 				</ListItemButton>
-				{index < getFilteredAndSortedSubaccounts().filter(sa => !filterMissingEmergency || sa.allEmergenciesRegistered === false).length - 1 && <Divider sx={{ mx: 2.5 }} />}
+				{index < getPaginatedSubaccounts().length - 1 && <Divider sx={{ mx: 2.5 }} />}
 			</React.Fragment>
 			))}
 		</List>
+		<Box sx={{ p: 2, display: 'flex', justifyContent: 'center', borderTop: '1px solid #f5f5f5' }}>
+			<Pagination 
+				count={Math.ceil(getFilteredAndSortedSubaccounts().length / itemsPerPage)} 
+				page={currentPage} 
+				onChange={handlePageChange}
+				color="primary"
+				size="small"
+			/>
+		</Box>
+		</>
 		)}
 	</Paper>
 
