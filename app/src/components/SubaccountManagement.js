@@ -11,6 +11,7 @@ import ConversationsList from './ConversationsList';
 
 function SubaccountManagement() {
 const [subaccounts, setSubaccounts] = useState([]);
+const [badges, setBadges] = useState({}); // Store badges separately by SID
 const [loading, setLoading] = useState(false);
 const [error, setError] = useState(null);
 // const [newSubaccountName, setNewSubaccountName] = useState('');
@@ -25,8 +26,8 @@ const [filterMissingEmergency, setFilterMissingEmergency] = useState(false);
 const [deleteMode, setDeleteMode] = useState(false);
 const [currentPage, setCurrentPage] = useState(1);
 const [itemsPerPage] = useState(10);
-const badgesLoadedRef = useRef(new Set());
 const isFetchingRef = useRef(new Set());
+const abortControllerRef = useRef(null);
 
 useEffect(() => {
 	fetchSubaccounts();
@@ -46,45 +47,62 @@ const fetchSubaccounts = async () => {
 	}
 };
 
-// Fetch badge data only for visible page items
-const fetchBadgesForPage = async (pageSubaccounts) => {
-	// Use Promise.all to properly handle async operations
-	await Promise.all(
-		pageSubaccounts.map(async (subaccount) => {
-			// Skip if already loaded or currently being fetched
-			if (badgesLoadedRef.current.has(subaccount.sid) || isFetchingRef.current.has(subaccount.sid)) {
-				return;
-			}
-			
-			// Skip if badge data already exists
-			if (subaccount.allEmergenciesRegistered !== null && subaccount.basicAuthMedia !== null) {
-				badgesLoadedRef.current.add(subaccount.sid);
-				return;
-			}
-			
-			// Mark as currently fetching
-			isFetchingRef.current.add(subaccount.sid);
-			
-			try {
-				const badgeResponse = await axios.get(`http://localhost:5000/subaccounts/${subaccount.sid}/badges`);
-				// Update the subaccount with badge data
-				setSubaccounts(prevSubaccounts => 
-					prevSubaccounts.map(sa => 
-						sa.sid === subaccount.sid 
-							? { ...sa, ...badgeResponse.data }
-							: sa
-					)
-				);
-				// Mark as loaded
-				badgesLoadedRef.current.add(subaccount.sid);
-			} catch (err) {
-				console.error(`Error fetching badges for ${subaccount.sid}:`, err);
-			} finally {
-				// Remove from fetching set
-				isFetchingRef.current.delete(subaccount.sid);
-			}
-		})
-	);
+// Fetch badge data with slow loading (throttled)
+const fetchBadgesForPage = async (pageSubaccounts, shouldAbort = () => false) => {
+	for (const subaccount of pageSubaccounts) {
+		// Check if we should abort (e.g., page changed)
+		if (shouldAbort()) {
+			break;
+		}
+		
+		// Skip if already loaded or currently being fetched
+		if (badges[subaccount.sid] || isFetchingRef.current.has(subaccount.sid)) {
+			continue;
+		}
+		
+		// Mark as currently fetching
+		isFetchingRef.current.add(subaccount.sid);
+		
+		try {
+			const badgeResponse = await axios.get(`http://localhost:5000/subaccounts/${subaccount.sid}/badges`);
+			// Store badge data separately
+			setBadges(prev => ({
+				...prev,
+				[subaccount.sid]: badgeResponse.data
+			}));
+		} catch (err) {
+			console.error(`Error fetching badges for ${subaccount.sid}:`, err);
+		} finally {
+			// Remove from fetching set
+			isFetchingRef.current.delete(subaccount.sid);
+		}
+		
+		// Add delay between requests (300ms) to slow down loading
+		await new Promise(resolve => setTimeout(resolve, 300));
+	}
+};
+
+// Fetch remaining badges after current page is loaded
+const fetchRemainingBadges = async (currentPageSubaccounts, shouldAbort = () => false) => {
+	// First, load current page
+	await fetchBadgesForPage(currentPageSubaccounts, shouldAbort);
+	
+	// If not aborted, continue with remaining subaccounts
+	if (!shouldAbort()) {
+		const allSubaccounts = getSubaccountsWithBadges();
+		const currentPageSids = new Set(currentPageSubaccounts.map(sa => sa.sid));
+		const remainingSubaccounts = allSubaccounts.filter(sa => !currentPageSids.has(sa.sid));
+		
+		await fetchBadgesForPage(remainingSubaccounts, shouldAbort);
+	}
+};
+
+// Merge subaccounts with their badges
+const getSubaccountsWithBadges = () => {
+	return subaccounts.map(sa => ({
+		...sa,
+		...(badges[sa.sid] || {})
+	}));
 };
 
 // const handleCreateSubaccount = async () => {
@@ -178,7 +196,8 @@ const handleTabChange = (event, newValue) => {
 
 // Filter and sort subaccounts based on emergency filter
 const getFilteredAndSortedSubaccounts = () => {
-	let filtered = [...subaccounts];
+	// Merge subaccounts with badges first
+	let filtered = getSubaccountsWithBadges();
 	
 	// Apply emergency filter if active
 	if (filterMissingEmergency) {
@@ -210,29 +229,40 @@ const getPaginatedSubaccounts = () => {
 // Handle page change and fetch badges for new page
 const handlePageChange = (event, value) => {
 	setCurrentPage(value);
+	// Cancel any ongoing badge fetching
+	if (abortControllerRef.current) {
+		abortControllerRef.current.abort = true;
+	}
 };
 
 // Fetch badges when page changes or filter changes
 useEffect(() => {
 	if (subaccounts.length > 0) {
+		// Create abort controller for this page
+		const abortController = { abort: false };
+		abortControllerRef.current = abortController;
+		
 		const pageSubaccounts = getPaginatedSubaccounts();
 		if (pageSubaccounts.length > 0) {
-			fetchBadgesForPage(pageSubaccounts);
+			fetchRemainingBadges(pageSubaccounts, () => abortController.abort);
 		}
 	}
 	// eslint-disable-next-line react-hooks/exhaustive-deps
-}, [currentPage, filterMissingEmergency]); // Removed subaccounts from dependencies to prevent infinite loop
+}, [currentPage, filterMissingEmergency]);
 
 // Initial fetch of badges when subaccounts first load
 useEffect(() => {
-	if (subaccounts.length > 0 && badgesLoadedRef.current.size === 0) {
+	if (subaccounts.length > 0 && Object.keys(badges).length === 0) {
+		const abortController = { abort: false };
+		abortControllerRef.current = abortController;
+		
 		const pageSubaccounts = getPaginatedSubaccounts();
 		if (pageSubaccounts.length > 0) {
-			fetchBadgesForPage(pageSubaccounts);
+			fetchRemainingBadges(pageSubaccounts, () => abortController.abort);
 		}
 	}
 	// eslint-disable-next-line react-hooks/exhaustive-deps
-}, [subaccounts.length]); // Only trigger when length changes (initial load)
+}, [subaccounts.length]);
 
 return (
 	<Box>
