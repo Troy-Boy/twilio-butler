@@ -90,27 +90,61 @@ class SubaccountService:
 			'date_created': raw_data.date_created,
 			'status': raw_data.status,
 			'emergency_address_sid': raw_data.emergency_address_sid,
+			'emergency_address_status': getattr(raw_data, 'emergency_address_status', None),
 		})
 
 		return phone_numbers_data
 	
 	def check_all_emergencies_registered(self, subaccount_sid, subaccount_auth_token=None):
 		"""
-		Check if all phone numbers in the subaccount have emergency addresses registered.
-		Returns True if all phone numbers have emergency_address_sid, False otherwise.
+		Check emergency address registration status for all phone numbers in the subaccount.
+		Returns:
+			- "registered": All phone numbers have emergency addresses with status "registered"
+			- "pending": At least one emergency address is pending verification
+			- "failed": At least one phone number has no emergency address or registration failed
+			- "none": No phone numbers in the subaccount (vacuous truth, treated as registered)
 		"""
 		try:
+			# Get phone numbers with their emergency address status
 			phone_numbers_data = self.get_phone_numbers(subaccount_sid, subaccount_auth_token)
 			
-			# If there are no phone numbers, return True (vacuous truth)
+			# If there are no phone numbers, return "none"
 			if not phone_numbers_data:
-				return True
+				return "none"
 			
-			# Check if all phone numbers have an emergency_address_sid
-			return all(pn.get('emergency_address_sid') for pn in phone_numbers_data)
+			has_pending = False
+			has_failed = False
+			
+			for pn in phone_numbers_data:
+				emergency_address_sid = pn.get('emergency_address_sid')
+				emergency_address_status = pn.get('emergency_address_status')
+				
+				# If no emergency address at all, it's failed
+				if not emergency_address_sid:
+					has_failed = True
+					continue
+				
+				# Check the emergency_address_status field from the phone number
+				if emergency_address_status == 'registered':
+					# This is good, continue checking others
+					continue
+				elif emergency_address_status in ['pending-verification', 'pending', 'in-review']:
+					has_pending = True
+				else:
+					# Any other status (failed, rejected, etc.) or None is treated as failed
+					has_failed = True
+			
+			# Return status based on priority: failed > pending > registered
+			if has_failed:
+				return "failed"
+			elif has_pending:
+				return "pending"
+			else:
+				return "registered"
+				
 		except Exception as e:
 			print(f"Error checking emergency addresses for subaccount {subaccount_sid}: {e}")
-			return False
+			return "failed"
 	
 	def check_basic_auth_media(self, subaccount_sid, subaccount=None):
 		"""

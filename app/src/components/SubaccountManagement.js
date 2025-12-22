@@ -105,6 +105,14 @@ const getSubaccountsWithBadges = () => {
 	}));
 };
 
+// Get badge color based on emergency status
+const getEmergencyBadgeColor = (status) => {
+	if (status === null || status === undefined) return '#e0e0e0'; // Loading
+	if (status === 'registered' || status === 'none') return '#4caf50'; // Green
+	if (status === 'pending') return '#ff9800'; // Yellow/Orange
+	return '#f44336'; // Red for 'failed' or anything else
+};
+
 // const handleCreateSubaccount = async () => {
 // 	if (!newSubaccountName) return;
 	
@@ -199,20 +207,32 @@ const getFilteredAndSortedSubaccounts = () => {
 	// Merge subaccounts with badges first
 	let filtered = getSubaccountsWithBadges();
 	
-	// Apply emergency filter if active
+	// Apply emergency filter if active (show only failed or pending)
 	if (filterMissingEmergency) {
-		filtered = filtered.filter(sa => sa.allEmergenciesRegistered === false);
+		filtered = filtered.filter(sa => 
+			sa.allEmergenciesRegistered === 'failed' || 
+			sa.allEmergenciesRegistered === 'pending'
+		);
 	}
 	
-	// Sort: show missing emergency first for visibility
+	// Sort: show failed first, then pending, then registered
 	filtered.sort((a, b) => {
-		// Handle null values (still loading)
+		// Handle null values (still loading) - push to end
 		if (a.allEmergenciesRegistered === null) return 1;
 		if (b.allEmergenciesRegistered === null) return -1;
 		
-		// Sort by emergency status (false/missing first)
-		if (a.allEmergenciesRegistered === b.allEmergenciesRegistered) return 0;
-		return a.allEmergenciesRegistered ? 1 : -1;
+		// Priority order: failed > pending > registered/none
+		const statusPriority = {
+			'failed': 0,
+			'pending': 1,
+			'registered': 2,
+			'none': 2
+		};
+		
+		const aPriority = statusPriority[a.allEmergenciesRegistered] ?? 2;
+		const bPriority = statusPriority[b.allEmergenciesRegistered] ?? 2;
+		
+		return aPriority - bPriority;
 	});
 	
 	return filtered;
@@ -429,9 +449,7 @@ return (
 						label={subaccount.allEmergenciesRegistered === null ? '•••' : 'E'}
 						size="small"
 						sx={{ 
-							backgroundColor: subaccount.allEmergenciesRegistered === null 
-								? '#e0e0e0' 
-								: subaccount.allEmergenciesRegistered ? '#4caf50' : '#f44336',
+							backgroundColor: getEmergencyBadgeColor(subaccount.allEmergenciesRegistered),
 							color: 'white',
 							fontWeight: 600,
 							minWidth: 36,
@@ -504,7 +522,7 @@ return (
 				label="E" 
 				size="small"
 				sx={{ 
-					backgroundColor: selectedSubaccount.allEmergenciesRegistered ? '#4caf50' : '#f44336',
+					backgroundColor: getEmergencyBadgeColor(selectedSubaccount.allEmergenciesRegistered),
 					color: 'white',
 					fontWeight: 'bold',
 					minWidth: 40
